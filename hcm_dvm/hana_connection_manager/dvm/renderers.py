@@ -1,0 +1,1050 @@
+"""Renderers for DVM analyses.
+
+Each renderer takes a list of result dicts (one per query) and returns a Dash
+component tree. Charts use Plotly with a consistent DVM theme.
+"""
+
+import re
+from typing import Dict, List, Optional
+
+import pandas as pd
+from dash import html, dcc
+import dash_bootstrap_components as dbc
+
+from .components import (results_table, status_badge, elapsed_badge, row_col_badge,
+                         collapsible_sql, top_rows_control)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PLOTLY THEME (consistent across all charts)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Organic categorical series palette (mirrors --series-1…8 in assets/style.css),
+# padded to 10 with two deeper ramp steps.
+_CHART_COLORS = ["#0070f2", "#b8541a", "#2f7d6a", "#7b5ea7", "#a3123a",
+                 "#5b738b", "#b08a1e", "#3f7a2e", "#0d3673", "#8b4a0b"]
+
+_CHART_LAYOUT = dict(
+    font=dict(family="Figtree, system-ui, -apple-system, sans-serif", size=12, color="#556B82"),
+    plot_bgcolor="white",
+    paper_bgcolor="white",
+    margin=dict(l=50, r=20, t=40, b=40),
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
+                font=dict(size=11)),
+    xaxis=dict(gridcolor="#E5E7EB", gridwidth=1, zeroline=False,
+               title_font=dict(size=12, color="#556B82")),
+    yaxis=dict(gridcolor="#E5E7EB", gridwidth=1, zeroline=False,
+               title_font=dict(size=12, color="#556B82")),
+)
+
+
+def _chart_card(fig, title: str = "") -> html.Div:
+    """Wrap a Plotly figure in a styled chart card."""
+    children = []
+    if title:
+        children.append(
+            html.Div(title, style={"fontSize": "14px", "fontWeight": "600",
+                                   "color": "#1D2D3E", "marginBottom": "8px"})
+        )
+    # NOTE: do NOT set responsive=True. Charts mount inside display:none
+    # sections; a responsive graph collapses to 0px there and stays blank.
+    # A non-responsive graph renders at Plotly's default width and is visible
+    # once the section is shown. app-extras.js still nudges a resize so it
+    # fills the panel width when possible.
+    children.append(dcc.Graph(
+        figure=fig,
+        config={
+            "displayModeBar": True,
+            "displaylogo": False,
+            "toImageButtonOptions": {"format": "png", "filename": "dvm_chart"},
+        },
+        style={"borderRadius": "6px", "minHeight": "300px"}))
+    return html.Div(children, className="dvm-chart-card")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# HELPERS
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _source_badge(source_label: str) -> html.Span:
+    """Render a source label badge."""
+    cls = "dvm-badge dvm-badge-info"
+    if "SQL Statement Collection" in source_label:
+        cls = "dvm-badge dvm-badge-info"
+    elif "authored" in source_label:
+        cls = "dvm-badge dvm-badge-neutral"
+    elif "error" in source_label or "stub" in source_label:
+        cls = "dvm-badge dvm-badge-warning"
+    return html.Span(source_label, className=cls)
+
+
+def _section_header(title: str, source_label: str, elapsed_ms: float = 0,
+                    rows: int = 0, cols: int = 0) -> html.Div:
+    """Render a section header with source badge and stats."""
+    badges = [_source_badge(source_label)]
+    if elapsed_ms > 0:
+        badges.append(elapsed_badge(elapsed_ms))
+    if rows > 0:
+        badges.append(row_col_badge(rows, cols))
+    return html.Div(
+        [
+            html.H3(title, style={"margin": "0", "fontWeight": "600", "fontSize": "15px",
+                                  "color": "#1D2D3E"}),
+            html.Div(badges, style={"display": "flex", "alignItems": "center",
+                                    "gap": "6px", "flexWrap": "wrap"}),
+        ],
+        style={"display": "flex", "justifyContent": "space-between",
+               "alignItems": "center", "marginBottom": "10px", "marginTop": "20px"},
+    )
+
+
+def _enrich_a1_df(df: pd.DataFrame, enrichment_df: Optional[pd.DataFrame]) -> pd.DataFrame:
+    """Join enrichment data (DDTEXT, partitioning) onto A1 results."""
+    if enrichment_df is None or enrichment_df.empty:
+        return df
+    if df is None or df.empty:
+        return df
+
+    df_cols = [c.upper().strip() for c in df.columns]
+    df.columns = df_cols
+    enrich_cols = [c.upper().strip() for c in enrichment_df.columns]
+    enrichment_df.columns = enrich_cols
+
+    join_keys = []
+    if "SCHEMA_NAME" in df.columns and "SCHEMA_NAME" in enrichment_df.columns:
+        join_keys.append("SCHEMA_NAME")
+    if "TABLE_NAME" in df.columns and "TABLE_NAME" in enrichment_df.columns:
+        join_keys.append("TABLE_NAME")
+
+    if not join_keys:
+        return df
+
+    enrich_add_cols = ["DDTEXT", "PARTITIONING", "PART_COUNT"]
+    available = [c for c in enrich_add_cols if c in enrichment_df.columns and c not in df.columns]
+
+    if not available:
+        if "DDTEXT" in enrichment_df.columns:
+            available = ["DDTEXT"]
+        else:
+            return df
+
+    merge_cols = join_keys + available
+    enrich_subset = enrichment_df[merge_cols].drop_duplicates(subset=join_keys)
+
+    try:
+        result = df.merge(enrich_subset, on=join_keys, how="left")
+        if "DDTEXT" in result.columns:
+            cols = list(result.columns)
+            cols.remove("DDTEXT")
+            tn_idx = cols.index("TABLE_NAME") + 1 if "TABLE_NAME" in cols else 0
+            cols.insert(tn_idx, "DDTEXT")
+            result = result[cols]
+        return result
+    except Exception:
+        return df
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# RENDERERS
+# ═══════════════════════════════════════════════════════════════════════════
+
+def render_a1(results: List[dict], revision: str) -> html.Div:
+    """Render A1 -- Top Tables (overview table + two detail tables: by disk, by memory)."""
+    children = []
+
+    # Build overview combining both queries if available
+    overview_dfs = []
+    for res in results:
+        if res.get("success") and res.get("df") is not None:
+            enrichment_df = res.get("enrichment_df")
+            rdf = res["df"].copy()
+            if enrichment_df is not None:
+                rdf = _enrich_a1_df(rdf, enrichment_df)
+            overview_dfs.append(rdf)
+
+    if overview_dfs:
+        children.append(_build_a1_overview(overview_dfs))
+
+    # Detail tables
+    labels = ["Top Tables by Disk Size", "Top Tables by Memory Size"]
+    for i, res in enumerate(results):
+        label = labels[i] if i < len(labels) else f"Result {i+1}"
+        src = res.get("source_label", f"generated (rev {revision})")
+        children.append(_section_header(label, src,
+                                        elapsed_ms=res.get("elapsed_ms", 0),
+                                        rows=res.get("row_count", 0),
+                                        cols=res.get("col_count", 0)))
+        if res.get("success"):
+            df = res.get("df")
+            enrichment_df = res.get("enrichment_df")
+            if df is not None and enrichment_df is not None:
+                df = _enrich_a1_df(df, enrichment_df)
+            children.append(results_table(df, max_rows=100, name="Top_Tables",
+                                          sql=res.get("sql", "")))
+            children.append(collapsible_sql(res.get("sql", "")))
+        else:
+            children.append(html.Div(
+                [html.I(className="bi bi-exclamation-triangle me-2"),
+                 html.Span(res.get("error", "Unknown error"))],
+                className="dvm-error-card",
+            ))
+    return html.Div(children)
+
+
+def _build_a1_overview(dfs: List[pd.DataFrame]) -> html.Div:
+    """Build a combined overview showing top tables by Memory first, then Disk."""
+    sections = []
+
+    # Determine if we have memory and disk separately
+    # First DF = disk, Second DF = memory (from registry order)
+    disk_df = dfs[0] if len(dfs) > 0 else None
+    mem_df = dfs[1] if len(dfs) > 1 else disk_df
+
+    def _extract_overview(df, sort_col_hint, label):
+        """Extract overview columns: Table Name, Memory GB, Disk GB, Description, App Area."""
+        if df is None or df.empty:
+            return None
+        odf = df.copy()
+        odf.columns = [c.upper().strip() for c in odf.columns]
+
+        # Find key columns
+        table_col = next((c for c in odf.columns if c == "TABLE_NAME"), None)
+        schema_col = next((c for c in odf.columns if c == "SCHEMA_NAME"), None)
+        mem_col = None
+        disk_col = None
+        desc_col = None
+        app_col = None
+
+        for c in odf.columns:
+            if "MEM" in c and "GB" in c and not mem_col:
+                mem_col = c
+            elif "DISK" in c and "GB" in c and not disk_col:
+                disk_col = c
+            elif c == "DDTEXT" and not desc_col:
+                desc_col = c
+            elif ("APP" in c or "COMPONENT" in c) and not app_col:
+                app_col = c
+
+        if not table_col:
+            return None
+
+        # Build overview DF
+        cols_out = []
+        renames = {}
+        if schema_col:
+            cols_out.append(schema_col)
+            renames[schema_col] = "Schema"
+        cols_out.append(table_col)
+        renames[table_col] = "Table Name"
+        if mem_col:
+            cols_out.append(mem_col)
+            renames[mem_col] = "Memory Size (GB)"
+        if disk_col:
+            cols_out.append(disk_col)
+            renames[disk_col] = "Disk Size (GB)"
+        if desc_col:
+            cols_out.append(desc_col)
+            renames[desc_col] = "Description"
+        if app_col:
+            cols_out.append(app_col)
+            renames[app_col] = "Application Area"
+
+        available = [c for c in cols_out if c in odf.columns]
+        result = odf[available].head(30).copy()
+        result = result.rename(columns={k: v for k, v in renames.items() if k in result.columns})
+        return result
+
+    # Memory overview first (top 10 by default, switchable to 20/30)
+    mem_overview = _extract_overview(mem_df, "MEM", "Memory")
+    if mem_overview is not None and not mem_overview.empty:
+        sections.append(
+            html.Div([
+                html.H4("Top Tables by Memory",
+                         style={"fontSize": "14px", "fontWeight": "600",
+                                "color": "#1D2D3E", "marginBottom": "8px"}),
+                html.Div([
+                    top_rows_control(options=(10, 20, 30), default=10),
+                    results_table(mem_overview, max_rows=30, name="Top_by_Memory"),
+                ], className="dvm-topn-wrap"),
+            ], style={"marginBottom": "20px"})
+        )
+
+    # Disk overview second
+    disk_overview = _extract_overview(disk_df, "DISK", "Disk")
+    if disk_overview is not None and not disk_overview.empty:
+        sections.append(
+            html.Div([
+                html.H4("Top Tables by Disk",
+                         style={"fontSize": "14px", "fontWeight": "600",
+                                "color": "#1D2D3E", "marginBottom": "8px"}),
+                html.Div([
+                    top_rows_control(options=(10, 20, 30), default=10),
+                    results_table(disk_overview, max_rows=30, name="Top_by_Disk"),
+                ], className="dvm-topn-wrap"),
+            ], style={"marginBottom": "20px"})
+        )
+
+    if not sections:
+        return html.Div()
+
+    return html.Div(
+        [
+            html.Div(
+                [html.I(className="bi bi-clipboard-data me-2",
+                        style={"color": "var(--dvm-primary)"}),
+                 html.Span("Top Tables Overview", style={"fontWeight": "600", "fontSize": "14px"})],
+                style={"marginBottom": "12px"},
+            ),
+            *sections,
+            html.Hr(style={"margin": "24px 0", "borderColor": "var(--dvm-border)"}),
+        ],
+    )
+
+
+def _to_num(series):
+    """Coerce a column to numeric, tolerating US ('1,234.56') and European
+    ('1.234,56') thousands/decimal formats plus unit suffixes like 'GB'."""
+    if pd.api.types.is_numeric_dtype(series):
+        return pd.to_numeric(series, errors="coerce")
+    s = series.astype(str).str.strip().str.replace(r"[^\d.,\-]", "", regex=True)
+
+    def conv(v):
+        if not v or v in ("-", ".", ","):
+            return float("nan")
+        last_dot, last_comma = v.rfind("."), v.rfind(",")
+        if last_comma > last_dot:            # comma is the decimal sep (EU)
+            v = v.replace(".", "").replace(",", ".")
+        else:                                 # dot is decimal (US) — drop comma thousands
+            v = v.replace(",", "")
+        try:
+            return float(v)
+        except ValueError:
+            return float("nan")
+
+    return s.map(conv)
+
+
+def _build_situation_box(chart_df, ts_col, disk_size_col, total_mem_col,
+                         cs_col, rs_col) -> html.Div:
+    """'Situation as of <date>' snapshot: disk size, total memory, and its
+    column-/row-store split — whichever of those columns are present."""
+    def latest(col):
+        if not col or col not in chart_df.columns:
+            return None
+        vals = _to_num(chart_df[col]).dropna()
+        return float(vals.iloc[-1]) if len(vals) else None
+
+    disk = latest(disk_size_col)
+    total_mem = latest(total_mem_col)
+    cs = latest(cs_col)
+    rs = latest(rs_col)
+
+    if disk is None and total_mem is None and cs is None and rs is None:
+        return html.Div()
+
+    # Situation date = latest snapshot in the data, else now.
+    when = None
+    if ts_col and ts_col in chart_df.columns:
+        dts = pd.to_datetime(chart_df[ts_col], errors="coerce").dropna()
+        if len(dts):
+            when = dts.max()
+    if when is None:
+        when = pd.Timestamp.now()
+    date_str = f"{when:%B} {when.day}, {when.year}"
+
+    def line(label, val, indent=False):
+        return html.Div(
+            [
+                html.Span(label, style={"color": "var(--dvm-text-secondary)",
+                                        "marginRight": "8px"}),
+                html.Span(f"{val:,.2f} GB", className="dvm-num",
+                          style={"fontWeight": "600",
+                                 "fontVariantNumeric": "tabular-nums"}),
+            ],
+            style={"fontSize": "13px", "padding": "3px 0",
+                   "paddingLeft": ("22px" if indent else "0")},
+        )
+
+    rows = []
+    if disk is not None:
+        rows.append(line("Disk Size:", disk))
+    if total_mem is not None:
+        rows.append(line("Total Memory Size:", total_mem))
+    if cs is not None:
+        rows.append(line("Column Store Size:", cs, indent=True))
+    if rs is not None:
+        rows.append(line("Row Store Size:", rs, indent=True))
+
+    return html.Div(
+        [
+            html.Div(
+                [html.I(className="bi bi-clipboard-pulse me-2",
+                        style={"color": "var(--dvm-primary)"}),
+                 html.Span(f"Situation as of {date_str}",
+                           style={"fontWeight": "600", "fontSize": "13px"})],
+                style={"marginBottom": "8px"},
+            ),
+            html.Div(rows),
+        ],
+        className="dvm-info-card",
+        style={"marginBottom": "16px", "padding": "12px 16px",
+               "flexDirection": "column", "alignItems": "stretch"},
+    )
+
+
+def _extract_time(df_up: pd.DataFrame):
+    """Datetime Series from an uppercased df: prefer YEAR+MONTH(+DAY) columns,
+    else a snapshot/date/time column. Year-first strings parse as ISO, day-first
+    (DD/MM/YYYY) with dayfirst=True."""
+    cols = list(df_up.columns)
+    yr = next((c for c in cols if c in ("YEAR", "YR")), None)
+    mo = next((c for c in cols if c in ("MONTH", "MON", "MTH", "MONTH_NO")), None)
+    dy = next((c for c in cols if c in ("DAY", "DAY_NO")), None)
+    ts = (next((c for c in cols if "SNAPSHOT" in c or "TIMESTAMP" in c), None)
+          or next((c for c in cols if c in ("TIME", "DATE", "DATETIME", "DATE_TIME")), None)
+          or next((c for c in cols if "DATE" in c or "TIME" in c), None))
+    if yr and mo:
+        yy = pd.to_numeric(df_up[yr], errors="coerce")
+        mm = pd.to_numeric(df_up[mo], errors="coerce")
+        dd = (pd.to_numeric(df_up[dy], errors="coerce") if dy
+              else pd.Series(1, index=df_up.index))
+        return pd.to_datetime(dict(year=yy, month=mm, day=dd), errors="coerce")
+    if ts:
+        s = df_up[ts].dropna().astype(str).str.strip()
+        sample = s.iloc[0] if len(s) else ""
+        # Choose day/month order from the separator, matching SAP GUI locale
+        # conventions: 'YYYY/..' is ISO (year-first); 'MM/DD/YYYY' with slashes
+        # is US (month-first); 'DD.MM.YYYY' with dots is European (day-first).
+        if re.match(r"^\d{4}[/-]", sample):
+            dayfirst = False
+        elif "." in sample:
+            dayfirst = True
+        else:
+            dayfirst = False
+        # format="mixed" parses each value without pandas' inference warning
+        # (values can be 'YYYY/MM', 'MM/DD/YYYY', full timestamps, etc.).
+        try:
+            return pd.to_datetime(df_up[ts], errors="coerce",
+                                  dayfirst=dayfirst, format="mixed")
+        except (ValueError, TypeError):
+            return pd.to_datetime(df_up[ts], errors="coerce", dayfirst=dayfirst)
+    return None
+
+
+def _normalize_screen_history(df: pd.DataFrame):
+    """Roll the DBACOCKPIT 'DB Size History' screen grid up to one row per month
+    for the last year.
+
+    The screen returns daily (or weekly) rows with columns Date / Memory / Disk
+    Data / Disk Log / Disk Trace. This keeps the last 365 days, groups by
+    calendar month, takes each month's end-of-month reading, and returns a df
+    with a 'Date' (YYYY-MM) column plus GB columns named so render_a2 detects
+    the memory and disk series. Returns None if it doesn't look like that grid.
+    """
+    if df is None or getattr(df, "empty", True):
+        return None
+    up = df.copy()
+    up.columns = [str(c).upper().strip() for c in up.columns]
+    cols = list(up.columns)
+
+    date_col = next((c for c in cols if "DATE" in c or "TIME" in c
+                     or "SNAPSHOT" in c or c in ("MONTH", "PERIOD")), None)
+
+    def pick(*needles):
+        for c in cols:
+            if all(n in c for n in needles):
+                return c
+        return None
+
+    mem_col = pick("MEMORY") or pick("MEM")
+    data_col = pick("DISK", "DATA") or (up.columns[cols.index("DATA")] if "DATA" in cols else None)
+    log_col = pick("DISK", "LOG") or ("LOG" if "LOG" in cols else None)
+    trace_col = pick("DISK", "TRACE") or ("TRACE" if "TRACE" in cols else None)
+
+    # Must at least have a date and one size/memory column to be this grid.
+    if not date_col or not (mem_col or data_col):
+        return None
+
+    t = _extract_time(up)
+    if t is None or t.isna().all():
+        return None
+
+    work = pd.DataFrame({"_T": t})
+    src = {"Memory Used GB": mem_col, "Disk Data GB": data_col,
+           "Disk Log GB": log_col, "Disk Trace GB": trace_col}
+    for label, col in src.items():
+        if col and col in up.columns:
+            work[label] = _to_num(up[col])
+    work = work.dropna(subset=["_T"]).sort_values("_T")
+    if work.empty:
+        return None
+
+    # Keep the last 365 days.
+    cutoff = work["_T"].max() - pd.Timedelta(days=365)
+    work = work[work["_T"] >= cutoff]
+    if work.empty:
+        return None
+
+    work["_M"] = work["_T"].dt.to_period("M")
+    idx = work.groupby("_M")["_T"].idxmax()          # end-of-month reading
+    monthly = work.loc[idx].copy()
+
+    out = pd.DataFrame({"Date": monthly["_M"].astype(str)})
+    for label in src:
+        if label in monthly.columns:
+            out[label] = monthly[label].round(2).values
+    return out.sort_values("Date", ascending=False).reset_index(drop=True)
+
+
+def render_a2(results: List[dict], revision: str) -> html.Div:
+    """Render A2 -- DB Size & Memory History from the DBACOCKPIT DB Size History
+    screen: monthly line chart + downloadable monthly table."""
+    children = []
+    if not results:
+        return html.Div("No results.")
+
+    # Pick the HISTORY result for the chart (a df with a time column + a
+    # memory/disk-used column) so it works regardless of upload order offline.
+    def _is_history(r):
+        d = r.get("df")
+        if d is None or getattr(d, "empty", True):
+            return False
+        up = [str(c).upper() for c in d.columns]
+        has_time = any("DATE" in c or "TIME" in c or c in ("MONTH", "YEAR")
+                       or "SNAPSHOT" in c for c in up)
+        has_val = any(("USED" in c and "GB" in c) or ("HANA_USED" in c)
+                      or "MEMORY" in c or ("DISK" in c) for c in up)
+        return has_time and has_val
+
+    res = next((r for r in results if r.get("success") and _is_history(r)), results[0])
+    children.append(_section_header(
+        "Memory & Resource History (~1 Year)",
+        res.get("source_label", f"generated (rev {revision})"),
+        elapsed_ms=res.get("elapsed_ms", 0),
+        rows=res.get("row_count", 0),
+        cols=res.get("col_count", 0),
+    ))
+
+    if not res.get("success"):
+        children.append(html.Div(
+            [html.I(className="bi bi-x-circle me-2"),
+             html.Span(res.get("error", ""))],
+            className="dvm-error-card",
+        ))
+        return html.Div(children)
+
+    df = res.get("df")
+    if df is None or df.empty:
+        children.append(html.Div(
+            [html.I(className="bi bi-bar-chart",
+                    style={"fontSize": "20px", "color": "var(--dvm-border)"}),
+             html.P("No history data in the requested time range.")],
+            className="dvm-empty-state",
+        ))
+        return html.Div(children)
+
+    # Roll the DB Size History screen grid up to one row per month (last year),
+    # with chart-friendly column names. Both the chart loop and the table below
+    # then use this monthly rollup as the single source.
+    _monthly = _normalize_screen_history(df)
+    if _monthly is not None and not _monthly.empty:
+        df = _monthly
+        res["df"] = _monthly
+        res["row_count"] = len(_monthly)
+        res["col_count"] = len(_monthly.columns)
+
+    try:
+        import plotly.graph_objects as go
+
+        # ── Situation box: use whichever result df carries snapshot columns ──
+        # (the "Current Memory Snapshot" query online, or an uploaded snapshot
+        # file offline). Only shows when true size / store columns are present.
+        sit_src = None
+        for r in results:
+            d = r.get("df")
+            if d is None or getattr(d, "empty", True):
+                continue
+            up = [str(c).upper().strip() for c in d.columns]
+            if (any("DISK" in c and "SIZE" in c for c in up)
+                    or any("COLUMN" in c and "STORE" in c for c in up)
+                    or any("ROW" in c and "STORE" in c for c in up)
+                    or any("TOTAL" in c and ("MEMORY" in c or "MEM" in c) and "GB" in c
+                           for c in up)):
+                sit_src = d.copy()
+                sit_src.columns = up
+                break
+
+        if sit_src is not None:
+            scols = list(sit_src.columns)
+
+            def sfind(pred):
+                return next((c for c in scols if pred(c)), None)
+
+            disk_size_col = (sfind(lambda c: "DISK" in c and "SIZE" in c and "GB" in c)
+                             or sfind(lambda c: "DISK" in c and "SIZE" in c))
+            total_mem_col = (sfind(lambda c: "TOTAL" in c and ("MEMORY" in c or "MEM" in c) and "GB" in c)
+                             or sfind(lambda c: ("MEMORY" in c or "MEM" in c) and "SIZE" in c and "GB" in c))
+            cs_col = (sfind(lambda c: "COLUMN" in c and "STORE" in c)
+                      or sfind(lambda c: "COLUMN_STORE" in c))
+            rs_col = (sfind(lambda c: "ROW" in c and "STORE" in c)
+                      or sfind(lambda c: "ROW_STORE" in c))
+            sit_ts = (sfind(lambda c: "SNAPSHOT" in c or "TIMESTAMP" in c)
+                      or sfind(lambda c: c in ("TIME", "DATE", "DATETIME")))
+            children.append(_build_situation_box(
+                sit_src, sit_ts, disk_size_col, total_mem_col, cs_col, rs_col))
+
+        # ── Trend chart: collect Memory + Disk time-series from ALL result dfs.
+        # Memory history and disk-usage history are separate queries, so the two
+        # lines come from different dataframes and are aligned by time bucket. ──
+        def _is_mem(c):
+            return (("HANA_USED" in c and "GB" in c)
+                    or (("MEMORY" in c or "MEM" in c) and "USED" in c and "GB" in c))
+
+        def _is_disk(c):
+            return (c == "DATA_GB" or ("DISK" in c and "USED" in c and "GB" in c)
+                    or ("DISK" in c and "GB" in c))
+
+        series = []  # (label, color_idx, time_series, value_series)
+        picked = set()
+        for r in results:
+            d = r.get("df")
+            if d is None or getattr(d, "empty", True):
+                continue
+            up = d.copy()
+            up.columns = [str(c).upper().strip() for c in up.columns]
+            t = _extract_time(up)
+            if t is None or not t.notna().any():
+                continue
+            mcol = next((c for c in up.columns if _is_mem(c)), None)
+            dcol = next((c for c in up.columns if _is_disk(c)), None)
+            if mcol and "mem" not in picked:
+                series.append(("HANA GB Used", 0, t, _to_num(up[mcol])))
+                picked.add("mem")
+            if dcol and "disk" not in picked:
+                series.append(("Disk GB Used", 2, t, _to_num(up[dcol])))
+                picked.add("disk")
+
+        if not series:
+            children.append(html.Div(
+                "Trend chart unavailable: need a date (or Year + Month) column and "
+                "a Memory Used (GB) or Disk (GB) column.",
+                className="dvm-warning-card",
+            ))
+        else:
+            # Adaptive granularity from the combined span: short spans (<= ~3
+            # months) grouped by week, longer spans by month.
+            all_ts = pd.concat([s[2].dropna() for s in series])
+            span_days = int((all_ts.max() - all_ts.min()).days) if len(all_ts) else 0
+            if span_days <= 92:
+                freq, keep, tickfmt, gran = "W-MON", 26, "%d %b %y", "Weekly"
+            else:
+                freq, keep, tickfmt, gran = "M", 12, "%b %Y", "Monthly"
+
+            fig = go.Figure()
+            for (label, cidx, t, v) in series:
+                tmp = pd.DataFrame({"_TS": t, "_V": v}).dropna(subset=["_TS"])
+                if tmp.empty:
+                    continue
+                tmp["_B"] = tmp["_TS"].dt.to_period(freq)
+                g = tmp.groupby("_B")["_V"].mean().sort_index().tail(keep)
+                fig.add_trace(go.Scatter(
+                    x=[p.to_timestamp() for p in g.index], y=list(g.values),
+                    mode="lines+markers", name=label,
+                    line=dict(color=_CHART_COLORS[cidx], width=2.5),
+                    marker=dict(size=6),
+                ))
+
+            fig.update_layout(height=380, yaxis_title="GB", showlegend=True,
+                              **_CHART_LAYOUT)
+            fig.update_layout(
+                # Pin the title to the very top; the extra top margin gives the
+                # horizontal legend its own band below the title (no overlap).
+                title=dict(text=f"{gran} Resource Trend", font=dict(size=14),
+                           x=0, xanchor="left", y=0.97, yanchor="top"),
+                margin=dict(l=50, r=20, t=68, b=40),
+                legend=dict(orientation="h", yanchor="bottom", y=1.04,
+                            xanchor="left", x=0, font=dict(size=11)),
+                xaxis=dict(tickformat=tickfmt),
+            )
+            children.append(_chart_card(fig))
+
+    except ImportError:
+        children.append(html.Div("Plotly not installed.", className="dvm-warning-card"))
+    except Exception as e:
+        children.append(html.Div(f"Chart error: {e}", className="dvm-error-card"))
+
+    # DVM "System Information [DB SIZE HISTORY]" slide: the monthly rollup of the
+    # DBACOCKPIT DB Size History screen (Date / Memory / Disk Data / Disk Log /
+    # Disk Trace), downloadable (Copy / CSV / Excel). Same data as the chart.
+    children.append(_section_header(
+        "System Information [DB SIZE HISTORY]",
+        res.get("source_label", f"generated (rev {revision})"),
+        elapsed_ms=res.get("elapsed_ms", 0),
+        rows=res.get("row_count", 0),
+        cols=res.get("col_count", 0)))
+    children.append(results_table(df, max_rows=60,
+                                  name="DB_Size_History_Monthly",
+                                  sql=res.get("sql", "")))
+    children.append(collapsible_sql(res.get("sql", "")))
+
+    return html.Div(children)
+
+
+def render_a3(results: List[dict], revision: str) -> html.Div:
+    """Render A3 -- Memory Overview (pie chart by SUBAREA + table)."""
+    children = []
+    if not results:
+        return html.Div("No results.")
+
+    res = results[0]
+    children.append(_section_header(
+        "Memory Distribution by Subarea",
+        res.get("source_label", f"generated (rev {revision})"),
+        elapsed_ms=res.get("elapsed_ms", 0),
+        rows=res.get("row_count", 0),
+        cols=res.get("col_count", 0),
+    ))
+
+    if not res.get("success"):
+        children.append(html.Div(
+            [html.I(className="bi bi-x-circle me-2"),
+             html.Span(res.get("error", ""))],
+            className="dvm-error-card",
+        ))
+        return html.Div(children)
+
+    df = res.get("df")
+    if df is None or df.empty:
+        children.append(html.Div("No memory data returned.", className="dvm-empty-state"))
+        return html.Div(children)
+
+    try:
+        import plotly.graph_objects as go
+
+        chart_df = df.copy()
+        chart_df.columns = [c.upper().strip() for c in chart_df.columns]
+
+        label_col = None
+        value_col = None
+        for col in chart_df.columns:
+            if "SUBAREA" in col:
+                label_col = col
+            elif "DETAIL" in col and not label_col:
+                label_col = col
+            elif "CATEGORY" in col and not label_col:
+                label_col = col
+
+        for col in chart_df.columns:
+            if "USED" in col and "GB" in col:
+                value_col = col
+            elif col == "USED_GB":
+                value_col = col
+            elif "SIZE_GB" in col and not value_col:
+                value_col = col
+
+        if label_col and value_col:
+            chart_df[value_col] = pd.to_numeric(chart_df[value_col], errors="coerce")
+            chart_df = chart_df.dropna(subset=[value_col])
+            # Filter out zero/negative values for pie
+            chart_df = chart_df[chart_df[value_col] > 0].head(15)
+
+            fig = go.Figure(data=[go.Pie(
+                labels=chart_df[label_col],
+                values=chart_df[value_col],
+                hole=0.4,
+                marker=dict(colors=_CHART_COLORS[:len(chart_df)]),
+                textposition="auto",
+                textinfo="label+percent",
+                hovertemplate="%{label}: %{value:.2f} GB (%{percent})<extra></extra>",
+            )])
+            fig.update_layout(
+                height=420,
+                font=dict(family="Figtree, system-ui, -apple-system, sans-serif", size=12, color="#556B82"),
+                plot_bgcolor="white",
+                paper_bgcolor="white",
+                margin=dict(l=20, r=20, t=40, b=40),
+                legend=dict(orientation="h", yanchor="bottom", y=-0.15,
+                            xanchor="center", x=0.5, font=dict(size=11)),
+                title=dict(text="Memory Used (GB) by Subarea", font=dict(size=14)),
+            )
+            children.append(_chart_card(fig))
+        else:
+            children.append(html.Div(
+                "Chart unavailable: expected SUBAREA + USED_GB columns.",
+                className="dvm-warning-card",
+            ))
+
+    except ImportError:
+        children.append(html.Div("Plotly not installed.", className="dvm-warning-card"))
+    except Exception as e:
+        children.append(html.Div(f"Chart error: {e}", className="dvm-error-card"))
+
+    children.append(collapsible_sql(res.get("sql", "")))
+
+    # Table: only Subarea + Used (GB), per request. Fall back to the full df if
+    # those columns aren't present.
+    up = {c: str(c).upper().strip() for c in df.columns}
+    sub_c = next((c for c in df.columns if "SUBAREA" in up[c]), None)
+    gb_c = next((c for c in df.columns
+                 if ("USED" in up[c] and "GB" in up[c]) or up[c] == "USED_GB"), None)
+    table_df = df[[sub_c, gb_c]].copy() if (sub_c and gb_c) else df
+    children.append(results_table(table_df, max_rows=100, name="Memory_Overview",
+                                  sql=res.get("sql", "")))
+    return html.Div(children)
+
+
+def render_a4(results: List[dict], revision: str) -> html.Div:
+    """Render A4 -- Top Growing Tables (Top 10 lists + three detail tables)."""
+    children = []
+
+    # Build Top 10 summary section
+    top10_section = _build_a4_top10(results)
+    if top10_section:
+        children.append(top10_section)
+
+    # Detail tables
+    labels = [
+        "Top Growth by Records (30d)",
+        "Top Growth by Disk (30d)",
+        "Top Growth by Memory (30d)",
+    ]
+    for i, res in enumerate(results):
+        label = labels[i] if i < len(labels) else f"Result {i+1}"
+        src = res.get("source_label", f"generated (rev {revision})")
+        children.append(_section_header(label, src,
+                                        elapsed_ms=res.get("elapsed_ms", 0),
+                                        rows=res.get("row_count", 0),
+                                        cols=res.get("col_count", 0)))
+        if res.get("success"):
+            children.append(results_table(res.get("df"), max_rows=50,
+                                          name=label.replace(" ", "_"),
+                                          sql=res.get("sql", "")))
+            children.append(collapsible_sql(res.get("sql", "")))
+        else:
+            children.append(html.Div(
+                [html.I(className="bi bi-x-circle me-2"),
+                 html.Span(res.get("error", ""))],
+                className="dvm-error-card",
+            ))
+    return html.Div(children)
+
+
+def _build_a4_top10(results: List[dict]) -> Optional[html.Div]:
+    """Build Top 10 summary cards for A4 growth results."""
+    categories = ["Records", "Disk", "Memory"]
+    cards = []
+
+    for i, res in enumerate(results):
+        if not res.get("success") or res.get("df") is None:
+            continue
+        df = res["df"].copy()
+        if df.empty:
+            continue
+
+        df.columns = [c.upper().strip() for c in df.columns]
+        cat_name = categories[i] if i < len(categories) else f"Category {i+1}"
+
+        # Find table name and growth column
+        table_col = next((c for c in df.columns if c == "TABLE_NAME"), None)
+        if not table_col:
+            table_col = next((c for c in df.columns if "TABLE" in c), None)
+
+        # Growth column: look for GROWTH, DIFF, DELTA, or last numeric column
+        growth_col = None
+        for c in df.columns:
+            if "GROWTH" in c or "DIFF" in c or "DELTA" in c:
+                growth_col = c
+                break
+        if not growth_col:
+            # Try the last numeric-looking column
+            for c in reversed(list(df.columns)):
+                if c != table_col and df[c].dtype in ("float64", "int64"):
+                    growth_col = c
+                    break
+                try:
+                    pd.to_numeric(df[c], errors="raise")
+                    growth_col = c
+                    break
+                except (ValueError, TypeError):
+                    continue
+
+        if not table_col:
+            continue
+
+        # Top 10 list
+        top10 = df.head(10)
+        items = []
+        for idx, row in top10.iterrows():
+            tname = str(row.get(table_col, ""))
+            gval = ""
+            if growth_col and growth_col in row.index:
+                try:
+                    v = float(row[growth_col])
+                    if "GB" in growth_col or "DISK" in growth_col.upper():
+                        gval = f"{v:+.2f} GB"
+                    elif "MB" in growth_col:
+                        gval = f"{v:+.1f} MB"
+                    else:
+                        gval = f"{v:+,.0f}"
+                except (ValueError, TypeError):
+                    gval = str(row[growth_col])
+
+            items.append(
+                html.Li(
+                    [html.Span(tname, style={"fontWeight": "500"}),
+                     html.Span(f" ({gval})" if gval else "",
+                               style={"color": "var(--dvm-text-secondary)", "fontSize": "11px"})],
+                    style={"marginBottom": "3px", "fontSize": "12px"},
+                )
+            )
+
+        cards.append(
+            html.Div(
+                [
+                    html.Div(
+                        [html.I(className="bi bi-arrow-up-right",
+                                style={"color": _CHART_COLORS[i % len(_CHART_COLORS)]}),
+                         html.Span(f"Top 10 by {cat_name}",
+                                   style={"fontWeight": "600", "fontSize": "13px"})],
+                        style={"marginBottom": "8px", "display": "flex",
+                               "gap": "6px", "alignItems": "center"},
+                    ),
+                    html.Ol(items, style={"paddingLeft": "18px", "margin": "0"}),
+                ],
+                style={"flex": "1", "minWidth": "220px", "padding": "12px",
+                       "borderRadius": "6px", "border": "1px solid var(--dvm-border)",
+                       "backgroundColor": "var(--dvm-bg-subtle, #f8f9fa)"},
+            )
+        )
+
+    if not cards:
+        return None
+
+    return html.Div(
+        [
+            html.Div(
+                [html.I(className="bi bi-trophy me-2",
+                        style={"color": "var(--dvm-primary)"}),
+                 html.Span("Top 10 Growing Tables (30d Summary)",
+                           style={"fontWeight": "600", "fontSize": "14px"}),
+                 html.Button(
+                     [html.I(className="bi bi-clipboard"),
+                      html.Span("Copy", **{"data-i18n": "table.copy"})],
+                     type="button", className="dvm-table-btn",
+                     title="Copy this summary", style={"marginLeft": "auto"},
+                     **{"data-copy-summary": "1"}),
+                 ],
+                style={"marginBottom": "12px", "display": "flex",
+                       "alignItems": "center", "gap": "6px"},
+            ),
+            html.Div(cards, style={"display": "flex", "gap": "16px", "flexWrap": "wrap",
+                                   "marginBottom": "24px"}),
+            html.Hr(style={"margin": "0 0 20px", "borderColor": "var(--dvm-border)"}),
+        ],
+        className="dvm-summary",
+    )
+
+
+def render_a5(results: List[dict], revision: str) -> html.Div:
+    """Render A5 -- Partitioned Tables."""
+    children = []
+    if not results:
+        return html.Div("No results.")
+
+    res = results[0]
+    children.append(_section_header(
+        "Partitioned Column-Store Tables",
+        res.get("source_label", f"generated (rev {revision})"),
+        elapsed_ms=res.get("elapsed_ms", 0),
+        rows=res.get("row_count", 0),
+        cols=res.get("col_count", 0),
+    ))
+    if res.get("success"):
+        children.append(results_table(res.get("df"), max_rows=100,
+                                      name="Partitioned_Tables",
+                                      sql=res.get("sql", "")))
+        children.append(collapsible_sql(res.get("sql", "")))
+    else:
+        children.append(html.Div(
+            [html.I(className="bi bi-x-circle me-2"),
+             html.Span(res.get("error", ""))],
+            className="dvm-error-card",
+        ))
+    return html.Div(children)
+
+
+def render_a6(results: List[dict], revision: str) -> html.Div:
+    """Render A6 -- NSE: 'in use?' banner + the three detail tables."""
+    children = []
+    labels = ["NSE Tables", "NSE Partitions", "NSE Columns"]
+
+    # NSE is "in use" if ANY of the NSE queries (tables / partitions / columns)
+    # returned rows. Name which parts have data (e.g. "In use — Columns").
+    def _has_rows(r):
+        d = r.get("df")
+        return d is not None and not getattr(d, "empty", True) and len(d) > 0
+
+    used_parts = [labels[i].replace("NSE ", "")
+                  for i, r in enumerate(results) if _has_rows(r)]
+    in_use = bool(used_parts)
+    status_text = ("In use: " + ", ".join(used_parts)) if in_use else "Not in use"
+    children.append(html.Div(
+        [html.I(className="bi " + ("bi-check-circle-fill" if in_use else "bi-dash-circle"),
+                style={"marginRight": "8px", "fontSize": "16px",
+                       "color": ("var(--dvm-success)" if in_use
+                                 else "var(--dvm-text-secondary)")}),
+         html.Span("Native Storage Extension (NSE): ",
+                   style={"color": "var(--dvm-text-secondary)"}),
+         html.Span(status_text,
+                   style={"fontWeight": "700",
+                          "color": ("var(--dvm-success)" if in_use
+                                    else "var(--dvm-text)")})],
+        className="dvm-info-card",
+        style={"marginBottom": "16px", "padding": "12px 16px", "alignItems": "center"},
+    ))
+
+    sub_tabs = []
+    for i, res in enumerate(results):
+        label = labels[i] if i < len(labels) else f"Result {i+1}"
+        src = res.get("source_label", f"generated (rev {revision})")
+
+        tab_content = []
+        tab_content.append(_section_header(label, src,
+                                           elapsed_ms=res.get("elapsed_ms", 0),
+                                           rows=res.get("row_count", 0),
+                                           cols=res.get("col_count", 0)))
+        if res.get("success"):
+            tab_content.append(results_table(res.get("df"), max_rows=100,
+                                             name=label.replace(" ", "_"),
+                                             sql=res.get("sql", "")))
+            tab_content.append(collapsible_sql(res.get("sql", "")))
+        else:
+            tab_content.append(html.Div(
+                [html.I(className="bi bi-x-circle me-2"),
+                 html.Span(res.get("error", ""))],
+                className="dvm-error-card",
+            ))
+
+        sub_tabs.append(
+            dbc.Tab(
+                html.Div(tab_content, style={"padding": "12px 0"}),
+                label=label,
+                tab_id=f"nse-sub-{i}",
+            )
+        )
+
+    children.append(
+        dbc.Tabs(sub_tabs, id="nse-sub-tabs", active_tab="nse-sub-0")
+    )
+    return html.Div(children)
+
+
+# Map analysis_id -> renderer function
+RENDERERS = {
+    "a1_top_tables": render_a1,
+    "a2_db_size_history": render_a2,
+    "a3_memory_overview": render_a3,
+    "a4_top_growing": render_a4,
+    "a5_partitioned_tables": render_a5,
+    "a6_nse": render_a6,
+}

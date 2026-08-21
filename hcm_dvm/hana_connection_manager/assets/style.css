@@ -1,0 +1,1804 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   DVM Tool — "Organic" design system (warm, rounded, Fraunces + Figtree)
+   Tokens keep their --dvm-* names so every component re-skins with no layout
+   changes; values come from the Organic theme (see design_system/styles.css).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Design Tokens (Organic — light) ───────────────────────────────────── */
+:root {
+  color-scheme: light;
+
+  /* Primary / Accent — Organic accent ramp (blue) */
+  --dvm-primary: #0070f2;          /* accent-500 */
+  --dvm-primary-hover: #005dc9;    /* accent-600 */
+  --dvm-primary-active: #0a49a0;   /* accent-700 */
+  --dvm-primary-focus: rgba(0, 112, 242, 0.3);
+
+  /* Second accent — Organic terracotta (a genuine second voice) */
+  --dvm-accent-2: #b8541a;         /* accent-2 base */
+  --dvm-accent-2-hover: #ad5f10;   /* accent-2-600 */
+  --dvm-accent-2-active: #8b4a0b;  /* accent-2-700 */
+  --dvm-accent-2-bg: #fdf2e7;      /* accent-2-100 */
+  --dvm-accent-2-fg: #8b4a0b;      /* accent-2-700 (text on tint) */
+
+  /* Text */
+  --dvm-text: #1d2d3e;
+  --dvm-text-secondary: #5b6675;   /* neutral-700 */
+  --dvm-text-disabled: #a0aab5;    /* neutral-500 */
+
+  /* Surfaces */
+  --dvm-bg: #f5f6f7;
+  --dvm-surface: #ffffff;
+  --dvm-subtle: #f7f8f9;           /* neutral-100 */
+  --dvm-neutral-chip: #eef0f2;     /* neutral-200 — small tinted fills */
+
+  /* Borders */
+  --dvm-border: #dee3e8;           /* neutral-300 */
+  --dvm-border-input: #c2cad3;     /* neutral-400 */
+  --dvm-hairline: color-mix(in srgb, var(--dvm-text) 8%, transparent);
+
+  /* Semantic (Organic status colors) */
+  --dvm-success: #1a7f43;
+  --dvm-success-bg: color-mix(in srgb, #1a7f43 12%, transparent);
+  --dvm-warning: #a35c00;
+  --dvm-warning-bg: color-mix(in srgb, #a35c00 14%, transparent);
+  --dvm-error: #b3261e;
+  --dvm-error-bg: color-mix(in srgb, #b3261e 12%, transparent);
+  --dvm-info: #0070f2;
+  --dvm-info-bg: #eaf3ff;          /* accent-100 */
+
+  /* Categorical series — Organic --series-1…8 (for charts, legends, dots) */
+  --series-1: #0070f2;
+  --series-2: #b8541a;
+  --series-3: #2f7d6a;
+  --series-4: #7b5ea7;
+  --series-5: #a3123a;
+  --series-6: #5b738b;
+  --series-7: #b08a1e;
+  --series-8: #3f7a2e;
+
+  /* Typography — Caprasimo display over Figtree body */
+  --dvm-font: 'Figtree', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --dvm-font-heading: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --dvm-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', 'Monaco', monospace;
+
+  /* Spacing (4px base — unchanged, keeps existing layout rhythm) */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  /* Radius — Organic, over-rounded */
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 28px;
+  --radius-pill: 999px;
+  /* Aliases used by a few component rules */
+  --dvm-radius-sm: var(--radius-sm);
+  --dvm-radius: var(--radius-md);
+  --dvm-bg-subtle: var(--dvm-subtle);
+
+  /* Elevation — Organic soft ink-tinted shadows on the light ground */
+  --shadow-card: 0 1px 2px color-mix(in srgb, #22303f 16%, transparent);
+  --shadow-raised: 0 3px 10px color-mix(in srgb, #22303f 18%, transparent);
+  --shadow-dropdown: 0 12px 32px color-mix(in srgb, #22303f 24%, transparent);
+
+  /* Motion */
+  --transition: 150ms ease;
+  --transition-slow: 200ms ease;
+}
+
+/* ─── Global Reset ──────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--dvm-font);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--dvm-text);
+  background: var(--dvm-bg);
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Layout Shell ──────────────────────────────────────────────────────── */
+#_pages_content, .dash-main-content {
+  background: var(--dvm-bg);
+}
+
+.dvm-app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.dvm-main-content {
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0;
+  flex: 1;
+}
+
+/* ─── Header ────────────────────────────────────────────────────────────── */
+.dvm-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--dvm-surface);
+  border-bottom: 1px solid var(--dvm-border);
+  padding: 0 var(--sp-6);
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dvm-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.dvm-header-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--dvm-text);
+  letter-spacing: -0.2px;
+}
+
+.dvm-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  position: relative;
+}
+
+.dvm-version-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dvm-primary);
+  background: var(--dvm-info-bg);
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+
+.dvm-connection-badge {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dvm-connection-badge.connected {
+  color: var(--dvm-success);
+  background: var(--dvm-success-bg);
+}
+.dvm-connection-badge.disconnected {
+  color: var(--dvm-text-secondary);
+  background: var(--dvm-neutral-chip);
+}
+
+/* ─── Primary Nav Tabs (left side) ─────────────────────────────────────── */
+.dvm-nav-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--dvm-subtle);
+  border-radius: var(--radius-md);
+  padding: 3px;
+}
+
+.dvm-nav-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 18px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all var(--transition);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dvm-text-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.dvm-nav-tab:hover {
+  color: var(--dvm-text);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.dvm-nav-tab.active {
+  background: var(--dvm-surface);
+  color: var(--dvm-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* ─── Right Cluster (version + conn status + buttons) ─────────────────── */
+.dvm-header-cluster {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.dvm-version-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--dvm-border);
+  background: var(--dvm-surface);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dvm-primary);
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+
+.dvm-version-control:hover {
+  border-color: var(--dvm-primary);
+  background: var(--dvm-info-bg);
+}
+
+.dvm-version-control .bi {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* ─── Version Panel (dropdown popover) ─────────────────────────────────── */
+.dvm-version-panel {
+  position: absolute;
+  top: 56px;
+  right: var(--sp-6);
+  z-index: 200;
+  width: 380px;
+  background: var(--dvm-surface);
+  border: 1px solid var(--dvm-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-raised);
+  padding: var(--sp-5);
+}
+
+.dvm-version-panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dvm-text);
+  margin: 0 0 var(--sp-3) 0;
+}
+
+/* Keep old step classes for backward compat if needed */
+.dvm-step-separator {
+  color: var(--dvm-border);
+  font-size: 16px;
+  margin: 0 2px;
+  user-select: none;
+}
+
+/* ─── Cards ─────────────────────────────────────────────────────────────── */
+.dvm-card {
+  background: var(--dvm-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--sp-6);
+  transition: box-shadow var(--transition);
+}
+
+.dvm-card:hover {
+  box-shadow: var(--shadow-raised);
+}
+
+.dvm-card-static {
+  background: var(--dvm-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--sp-6);
+}
+
+.dvm-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--dvm-text);
+  margin: 0;
+}
+
+.dvm-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--dvm-text);
+  margin: 0 0 var(--sp-2) 0;
+}
+
+.dvm-page-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--dvm-text);
+  margin: 0;
+  letter-spacing: -0.3px;
+}
+
+/* ─── Buttons ───────────────────────────────────────────────────────────── */
+.dvm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--dvm-font);
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+  text-decoration: none;
+  line-height: 1.2;
+}
+.dvm-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--dvm-primary-focus);
+}
+.dvm-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dvm-btn-primary {
+  background: var(--dvm-primary);
+  color: white;
+}
+.dvm-btn-primary:hover:not(:disabled) {
+  background: var(--dvm-primary-hover);
+}
+.dvm-btn-primary:active:not(:disabled) {
+  background: var(--dvm-primary-active);
+}
+
+.dvm-btn-secondary {
+  background: var(--dvm-surface);
+  color: var(--dvm-text);
+  border: 1px solid var(--dvm-border-input);
+}
+.dvm-btn-secondary:hover:not(:disabled) {
+  background: var(--dvm-subtle);
+  border-color: var(--dvm-text-secondary);
+}
+
+.dvm-btn-tertiary {
+  background: transparent;
+  color: var(--dvm-primary);
+  padding: 8px 12px;
+}
+.dvm-btn-tertiary:hover:not(:disabled) {
+  background: var(--dvm-info-bg);
+}
+
+.dvm-btn-sm {
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dvm-btn-icon {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--dvm-border);
+  background: var(--dvm-surface);
+  color: var(--dvm-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.dvm-btn-icon:hover {
+  background: var(--dvm-subtle);
+  color: var(--dvm-primary);
+  border-color: var(--dvm-primary);
+}
+
+/* Override DBC buttons to match */
+.btn-primary {
+  background-color: var(--dvm-primary) !important;
+  border-color: var(--dvm-primary) !important;
+  font-weight: 600 !important;
+  border-radius: var(--radius-md) !important;
+  font-family: var(--dvm-font) !important;
+  padding: 8px 16px !important;
+  font-size: 14px !important;
+  transition: all var(--transition) !important;
+}
+.btn-primary:hover {
+  background-color: var(--dvm-primary-hover) !important;
+  border-color: var(--dvm-primary-hover) !important;
+}
+.btn-primary:active {
+  background-color: var(--dvm-primary-active) !important;
+}
+.btn-primary:focus-visible {
+  box-shadow: 0 0 0 3px var(--dvm-primary-focus) !important;
+}
+
+.btn-outline-primary {
+  color: var(--dvm-primary) !important;
+  border-color: var(--dvm-border-input) !important;
+  font-weight: 600 !important;
+  border-radius: var(--radius-md) !important;
+  font-family: var(--dvm-font) !important;
+  padding: 8px 16px !important;
+  font-size: 14px !important;
+}
+.btn-outline-primary:hover {
+  background-color: var(--dvm-info-bg) !important;
+  color: var(--dvm-primary) !important;
+  border-color: var(--dvm-primary) !important;
+}
+
+.btn-outline-secondary {
+  color: var(--dvm-text) !important;
+  border-color: var(--dvm-border-input) !important;
+  font-weight: 500 !important;
+  border-radius: var(--radius-md) !important;
+  font-family: var(--dvm-font) !important;
+}
+.btn-outline-secondary:hover {
+  background: var(--dvm-subtle) !important;
+  border-color: var(--dvm-text-secondary) !important;
+}
+
+.btn-sm {
+  padding: 5px 12px !important;
+  font-size: 12px !important;
+}
+
+/* ─── Analysis Cards ────────────────────────────────────────────────────── */
+.dvm-analysis-card {
+  display: flex;
+  align-items: center;
+  padding: 14px 18px;
+  background: var(--dvm-surface);
+  border: 1px solid var(--dvm-border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--sp-2);
+  transition: all var(--transition);
+  cursor: default;
+}
+.dvm-analysis-card:hover {
+  border-color: var(--dvm-primary);
+  box-shadow: var(--shadow-card);
+  transform: translateY(-1px);
+}
+
+.dvm-analysis-card-icon,
+.dvm-analysis-card .bi {
+  font-size: 20px;
+  color: var(--dvm-primary);
+  margin-right: 14px;
+  flex-shrink: 0;
+}
+
+.dvm-analysis-card-body {
+  flex: 1;
+  min-width: 0;
+}
+.dvm-analysis-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dvm-text);
+  margin: 0;
+}
+.dvm-analysis-card-desc {
+  font-size: 12px;
+  color: var(--dvm-text-secondary);
+  margin: 2px 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dvm-analysis-card-status {
+  margin-right: var(--sp-3);
+  font-size: 12px;
+}
+
+/* ─── Badges / Pills ────────────────────────────────────────────────────── */
+.dvm-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+
+.dvm-badge-success { color: var(--dvm-success); background: var(--dvm-success-bg); }
+.dvm-badge-warning { color: var(--dvm-warning); background: var(--dvm-warning-bg); }
+.dvm-badge-error   { color: var(--dvm-error); background: var(--dvm-error-bg); }
+.dvm-badge-info    { color: var(--dvm-primary); background: var(--dvm-info-bg); }
+.dvm-badge-neutral { color: var(--dvm-text-secondary); background: var(--dvm-neutral-chip); }
+
+.dvm-pill {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* ─── Progress Bar ──────────────────────────────────────────────────────── */
+.dvm-progress-container {
+  margin: var(--sp-4) 0;
+}
+
+.dvm-progress-track {
+  width: 100%;
+  height: 6px;
+  background: var(--dvm-neutral-chip);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.dvm-progress-fill {
+  height: 100%;
+  background: var(--dvm-primary);
+  border-radius: 3px;
+  transition: width 300ms ease-out;
+}
+
+.dvm-progress-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dvm-text-secondary);
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dvm-progress-pct {
+  font-weight: 600;
+  color: var(--dvm-primary);
+}
+
+/* ─── Tabs ──────────────────────────────────────────────────────────────── */
+.dvm-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--dvm-border);
+  gap: 0;
+  overflow-x: auto;
+}
+
+.dvm-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dvm-text-secondary);
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.dvm-tab:hover {
+  color: var(--dvm-text);
+  background: var(--dvm-subtle);
+}
+.dvm-tab.active {
+  color: var(--dvm-primary);
+  border-bottom-color: var(--dvm-primary);
+  font-weight: 600;
+}
+
+.dvm-tab-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dvm-tab-dot.pending { background: var(--dvm-border); }
+.dvm-tab-dot.running { background: var(--dvm-warning); animation: pulse 1s ease infinite; }
+.dvm-tab-dot.done    { background: var(--dvm-success); }
+.dvm-tab-dot.error   { background: var(--dvm-error); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Override DBC tabs */
+.nav-tabs {
+  border-bottom: 1px solid var(--dvm-border) !important;
+}
+.nav-tabs .nav-link {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  font-family: var(--dvm-font) !important;
+  color: var(--dvm-text-secondary) !important;
+  padding: 10px 16px !important;
+  border: none !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 0 !important;
+  transition: all var(--transition) !important;
+}
+.nav-tabs .nav-link:hover {
+  color: var(--dvm-text) !important;
+  background: var(--dvm-subtle) !important;
+  border-color: transparent !important;
+}
+.nav-tabs .nav-link.active {
+  color: var(--dvm-primary) !important;
+  border-bottom-color: var(--dvm-primary) !important;
+  font-weight: 600 !important;
+  background: transparent !important;
+}
+
+/* ─── Tables ────────────────────────────────────────────────────────────── */
+.dvm-table-wrap {
+  border: 1px solid var(--dvm-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin: var(--sp-2) 0;
+}
+
+.dvm-table-scroll {
+  max-height: 480px;
+  overflow: auto;
+}
+
+.dvm-table-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.dvm-table-scroll::-webkit-scrollbar-track {
+  background: var(--dvm-subtle);
+}
+.dvm-table-scroll::-webkit-scrollbar-thumb {
+  background: var(--dvm-border-input);
+  border-radius: 4px;
+}
+.dvm-table-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--dvm-text-secondary);
+}
+
+.dvm-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+
+.dvm-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--dvm-bg);
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--dvm-text-secondary);
+  border-bottom: 1px solid var(--dvm-border);
+  white-space: nowrap;
+  text-align: left;
+}
+
+/* Right-align numeric columns */
+.dvm-table thead th.numeric,
+.dvm-table tbody td.numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.dvm-table tbody tr {
+  transition: background var(--transition);
+}
+.dvm-table tbody tr:nth-child(even) {
+  background: var(--dvm-subtle);
+}
+.dvm-table tbody tr:hover {
+  background: var(--dvm-info-bg);
+}
+
+.dvm-table tbody td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--dvm-hairline);
+  color: var(--dvm-text);
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Free-text "details" columns (e.g. PARTITIONING_DETAILS) show in full:
+   wrap onto multiple lines and use a wider column instead of an ellipsis. */
+.dvm-table tbody td.dvm-table-wrap,
+.dvm-table thead th.dvm-table-wrap {
+  max-width: 620px;
+  min-width: 260px;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+/* Sticky first column (table name) */
+.dvm-table tbody td:first-child,
+.dvm-table thead th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: inherit;
+}
+
+.dvm-table-header {
+  background: var(--dvm-subtle);
+}
+.dvm-table-th {
+  padding: 10px 12px;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--dvm-text-secondary);
+  border-bottom: 2px solid var(--dvm-border);
+  white-space: nowrap;
+  text-align: left;
+}
+.dvm-table-td {
+  padding: 10px 12px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--dvm-border);
+  color: var(--dvm-text);
+}
+.dvm-table-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.dvm-table-row-even {
+  background: var(--dvm-bg);
+}
+.dvm-table-row-odd {
+  background: var(--dvm-subtle);
+}
+.dvm-table-container {
+  border: 1px solid var(--dvm-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.dvm-table-caption {
+  font-size: 12px;
+  color: var(--dvm-text-secondary);
+  padding: 8px 12px;
+  border-top: 1px solid var(--dvm-border);
+  background: var(--dvm-subtle);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ─── Code / SQL Editor ─────────────────────────────────────────────────── */
+.dvm-code-editor {
+  width: 100%;
+  min-height: 240px;
+  max-height: 500px;
+  font-family: var(--dvm-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 14px 16px;
+  background: #1E2330;
+  color: #E4E8F0;
+  border: 1px solid var(--dvm-border);
+  border-radius: var(--radius-md);
+  resize: vertical;
+  tab-size: 4;
+}
+.dvm-code-editor:focus {
+  outline: none;
+  border-color: var(--dvm-primary);
+  box-shadow: 0 0 0 3px var(--dvm-primary-focus);
+}
+.dvm-code-editor::placeholder {
+  color: #6B7A8D;
+}
+
+.dvm-code-readonly {
+  background: var(--dvm-bg);
+  color: var(--dvm-text);
+  padding: 12px 16px;
+  font-family: var(--dvm-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--dvm-border);
+  max-height: 360px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* ─── States: Loading / Empty / Error ───────────────────────────────────── */
+.dvm-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-6);
+  color: var(--dvm-text-secondary);
+  font-size: 13px;
+}
+
+.dvm-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--dvm-border);
+  border-top-color: var(--dvm-primary);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.dvm-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  text-align: center;
+}
+.dvm-empty-state i {
+  font-size: 36px;
+  color: var(--dvm-border);
+  margin-bottom: var(--sp-3);
+}
+.dvm-empty-state p {
+  color: var(--dvm-text-secondary);
+  font-size: 13px;
+  margin: 0;
+}
+
+.dvm-error-card {
+  padding: 14px 18px;
+  background: var(--dvm-error-bg);
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--dvm-error);
+  font-size: 13px;
+  color: var(--dvm-error);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+}
+
+.dvm-success-card {
+  padding: 14px 18px;
+  background: var(--dvm-success-bg);
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--dvm-success);
+  font-size: 13px;
+  color: var(--dvm-success);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+}
+
+.dvm-info-card {
+  padding: 14px 18px;
+  background: var(--dvm-info-bg);
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--dvm-info);
+  font-size: 13px;
+  color: var(--dvm-text);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+}
+
+.dvm-warning-card {
+  padding: 14px 18px;
+  background: var(--dvm-warning-bg);
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--dvm-warning);
+  font-size: 13px;
+  color: var(--dvm-text);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+}
+
+/* ─── Charts ────────────────────────────────────────────────────────────── */
+.dvm-chart-card {
+  background: var(--dvm-surface);
+  border: 1px solid var(--dvm-border);
+  border-radius: var(--radius-md);
+  padding: var(--sp-4);
+  margin: var(--sp-3) 0;
+}
+.dvm-chart-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dvm-text);
+  margin-bottom: var(--sp-2);
+}
+
+/* ─── Section Headers ───────────────────────────────────────────────────── */
+.dvm-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--sp-3);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--dvm-border);
+}
+.dvm-section-header h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--dvm-text);
+  margin: 0;
+}
+
+/* ─── Inputs ────────────────────────────────────────────────────────────── */
+.dvm-input,
+.form-control {
+  font-family: var(--dvm-font) !important;
+  font-size: 14px !important;
+  border: 1px solid var(--dvm-border-input) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 8px 12px !important;
+  color: var(--dvm-text) !important;
+  transition: all var(--transition) !important;
+}
+.dvm-input:focus,
+.form-control:focus {
+  border-color: var(--dvm-primary) !important;
+  box-shadow: 0 0 0 3px var(--dvm-primary-focus) !important;
+  outline: none !important;
+}
+
+/* Dropdown overrides (dcc.Dropdown / react-select) — themed for light & dark */
+.Select-control {
+  border-radius: var(--radius-md) !important;
+  border-color: var(--dvm-border-input) !important;
+  background-color: var(--dvm-surface) !important;
+  color: var(--dvm-text) !important;
+}
+.Select-control:hover {
+  border-color: var(--dvm-primary) !important;
+}
+.Select.is-open > .Select-control { background-color: var(--dvm-surface) !important; }
+/* Selected value + typed text + placeholder must stay readable on the surface */
+.Select-value-label,
+.Select--single > .Select-control .Select-value .Select-value-label,
+.Select-input > input {
+  color: var(--dvm-text) !important;
+}
+.Select-placeholder { color: var(--dvm-text-secondary) !important; }
+.Select-arrow { border-top-color: var(--dvm-text-secondary) !important; }
+/* The open menu + its options */
+.Select-menu-outer,
+.Select-menu {
+  background-color: var(--dvm-surface) !important;
+  border-color: var(--dvm-border) !important;
+  box-shadow: var(--shadow-dropdown) !important;
+}
+.Select-option {
+  background-color: var(--dvm-surface) !important;
+  color: var(--dvm-text) !important;
+}
+.Select-option.is-focused {
+  background-color: var(--dvm-info-bg) !important;
+  color: var(--dvm-text) !important;
+}
+.Select-option.is-selected {
+  background-color: var(--dvm-neutral-chip) !important;
+  color: var(--dvm-text) !important;
+}
+.Select-noresults { color: var(--dvm-text-secondary) !important; }
+
+/* Native Dash dropdown (dcc.Dropdown in Dash 3+/4 uses .dash-dropdown-*).
+   Themed so the trigger, popover menu and options stay readable in light
+   AND dark — fixes the unreadable dark-text-on-dark options in offline mode. */
+.dash-dropdown-trigger {
+  background-color: var(--dvm-surface) !important;
+  color: var(--dvm-text) !important;
+  border: 1px solid var(--dvm-border-input) !important;
+  border-radius: var(--radius-md) !important;
+}
+.dash-dropdown-trigger:hover { border-color: var(--dvm-primary) !important; }
+.dash-dropdown-value,
+.dash-dropdown-value-item { color: var(--dvm-text) !important; }
+.dash-dropdown-placeholder { color: var(--dvm-text-secondary) !important; }
+.dash-dropdown-arrow, .dash-dropdown-trigger svg { color: var(--dvm-text-secondary) !important; }
+
+.dash-dropdown-content,
+.dash-dropdown-options,
+.dash-options-list {
+  background-color: var(--dvm-surface) !important;
+  color: var(--dvm-text) !important;
+  border-color: var(--dvm-border) !important;
+}
+.dash-dropdown-content {
+  border: 1px solid var(--dvm-border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-dropdown) !important;
+}
+.dash-dropdown-search {
+  background-color: var(--dvm-surface) !important;
+  color: var(--dvm-text) !important;
+  border: 1px solid var(--dvm-border-input) !important;
+  border-radius: var(--radius-sm) !important;
+}
+.dash-dropdown-search::placeholder { color: var(--dvm-text-secondary) !important; }
+
+.dash-dropdown-option,
+.dash-options-list-option {
+  color: var(--dvm-text) !important;
+  background-color: transparent !important;
+}
+.dash-dropdown-option:hover,
+.dash-options-list-option:hover,
+.dash-dropdown-option.highlighted,
+.dash-options-list-option.highlighted,
+.dash-options-list-option[aria-selected="true"] {
+  background-color: var(--dvm-info-bg) !important;
+  color: var(--dvm-text) !important;
+}
+.dash-dropdown-option.selected,
+.dash-options-list-option.selected {
+  background-color: var(--dvm-neutral-chip) !important;
+  color: var(--dvm-text) !important;
+}
+
+/* ─── Collapsible SQL ───────────────────────────────────────────────────── */
+.dvm-sql-toggle {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--dvm-primary);
+  cursor: pointer;
+  user-select: none;
+  margin-top: var(--sp-2);
+}
+.dvm-sql-toggle:hover {
+  text-decoration: underline;
+}
+
+.dvm-sql-block {
+  font-family: var(--dvm-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  background: var(--dvm-bg);
+  border: 1px solid var(--dvm-border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  max-height: 300px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin-top: 6px;
+}
+
+/* ─── Upload Zone ───────────────────────────────────────────────────────── */
+.dvm-upload-zone {
+  border: 2px dashed var(--dvm-border-input);
+  border-radius: var(--radius-md);
+  padding: 32px 24px;
+  text-align: center;
+  background: var(--dvm-subtle);
+  transition: all var(--transition);
+  cursor: pointer;
+}
+.dvm-upload-zone:hover {
+  border-color: var(--dvm-primary);
+  background: var(--dvm-info-bg);
+}
+.dvm-upload-zone i {
+  font-size: 28px;
+  color: var(--dvm-text-secondary);
+  margin-bottom: var(--sp-2);
+}
+.dvm-upload-zone p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--dvm-text-secondary);
+}
+
+/* ─── Tooltip / Hover styles ────────────────────────────────────────────── */
+[title] {
+  cursor: help;
+}
+
+/* ─── Skeleton loading ──────────────────────────────────────────────────── */
+.dvm-skeleton {
+  background: linear-gradient(90deg, var(--dvm-neutral-chip) 25%, #E5E7EB 50%, var(--dvm-neutral-chip) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+  height: 16px;
+  margin-bottom: 8px;
+}
+.dvm-skeleton.wide { width: 80%; }
+.dvm-skeleton.medium { width: 60%; }
+.dvm-skeleton.short { width: 40%; }
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ─── Responsive ────────────────────────────────────────────────────────── */
+@media (max-width: 1400px) {
+  .dvm-content-panel {
+    padding: var(--sp-4);
+  }
+}
+
+@media (max-width: 1024px) {
+  .dvm-sidebar {
+    width: 200px;
+    min-width: 200px;
+  }
+  .dvm-header {
+    padding: 0 var(--sp-4);
+  }
+}
+
+@media (max-width: 768px) {
+  .dvm-analyses-layout {
+    flex-direction: column;
+  }
+  .dvm-sidebar {
+    width: 100%;
+    min-width: 100%;
+    height: auto;
+    position: static;
+    border-right: none;
+    border-bottom: 1px solid var(--dvm-border);
+    padding: var(--sp-2) 0;
+  }
+  .dvm-sidebar-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 0;
+    padding: 0 var(--sp-2);
+  }
+  .dvm-sidebar-item {
+    white-space: nowrap;
+    padding: 8px 12px;
+  }
+  .dvm-content-panel {
+    min-height: auto;
+  }
+}
+
+/* ─── Misc / Utilities ──────────────────────────────────────────────────── */
+.gap-2 { gap: var(--sp-2) !important; }
+.gap-3 { gap: var(--sp-3) !important; }
+.gap-4 { gap: var(--sp-4) !important; }
+.mt-3 { margin-top: var(--sp-3) !important; }
+.mt-4 { margin-top: var(--sp-4) !important; }
+.mb-3 { margin-bottom: var(--sp-3) !important; }
+.mb-4 { margin-bottom: var(--sp-4) !important; }
+
+/* ─── Analysis Section Tab Bar ─────────────────────────────────────────── */
+/* REPLACED BY SIDEBAR - kept for backward compat if tests reference them */
+.dvm-section-tabs {
+  display: none;
+}
+
+.dvm-section-tab {
+  display: none;
+}
+
+/* ─── Vertical Left Sidebar ───────────────────────────────────────────── */
+.dvm-analyses-layout {
+  display: flex;
+  min-height: calc(100vh - 56px);
+}
+
+.dvm-sidebar {
+  width: 260px;
+  min-width: 260px;
+  background: var(--dvm-surface);
+  border-right: 1px solid var(--dvm-border);
+  position: sticky;
+  top: 56px;
+  height: calc(100vh - 56px);
+  overflow-y: auto;
+  z-index: 10;
+  padding: var(--sp-4) 0;
+}
+
+.dvm-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 var(--sp-3);
+}
+
+.dvm-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: var(--dvm-font);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dvm-text-secondary);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dvm-sidebar-item:hover {
+  background: var(--dvm-subtle);
+  color: var(--dvm-text);
+}
+
+.dvm-sidebar-item.active {
+  background: var(--dvm-info-bg);
+  color: var(--dvm-primary);
+  font-weight: 600;
+}
+
+.dvm-sidebar-item .bi {
+  font-size: 16px;
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+}
+
+.dvm-sidebar-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dvm-sidebar-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Content Panel (right side) */
+.dvm-content-panel {
+  flex: 1;
+  padding: var(--sp-6);
+  overflow-y: auto;
+  min-height: calc(100vh - 56px);
+  background: var(--dvm-bg);
+}
+
+/* Status indicator dots in tabs and overview cards */
+.dvm-status-indicator {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.dvm-status-indicator.pending {
+  background: var(--dvm-border);
+}
+
+.dvm-status-indicator.running {
+  background: var(--dvm-warning);
+  animation: dvm-pulse 1.2s infinite;
+}
+
+.dvm-status-indicator.done {
+  background: var(--dvm-success);
+}
+
+.dvm-status-indicator.error {
+  background: var(--dvm-error);
+}
+
+@keyframes dvm-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ─── Column Header Tooltips ───────────────────────────────────────────── */
+.dvm-table-th {
+  position: relative;
+}
+
+.dvm-th-text {
+  cursor: help;
+  border-bottom: 1px dotted var(--dvm-text-secondary);
+}
+
+.dvm-th-text[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 10px;
+  background: #1D2D3E;
+  color: #FFFFFF;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+  border-radius: 4px;
+  white-space: nowrap;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 1000;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+/* ─── Tab Pills (analysis detail view) ─────────────────────────────────── */
+.dvm-tab-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 4px;
+  background: var(--dvm-subtle);
+  border-radius: var(--dvm-radius-sm);
+  border: 1px solid var(--dvm-border);
+}
+
+.dvm-tab-pill {
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--dvm-font);
+  color: var(--dvm-text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--dvm-radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.dvm-tab-pill:hover {
+  background: var(--dvm-surface);
+  color: var(--dvm-text);
+  border-color: var(--dvm-border);
+}
+
+.dvm-tab-pill.active {
+  background: var(--dvm-surface);
+  color: var(--dvm-primary);
+  border-color: var(--dvm-primary);
+  box-shadow: 0 1px 3px rgba(0, 112, 242, 0.12);
+}
+
+/* ─── Overview Checklist ───────────────────────────────────────────────── */
+.dvm-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dvm-check-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--dvm-radius-sm);
+  font-size: 13px;
+  color: var(--dvm-text);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.dvm-check-label:hover {
+  background: var(--dvm-subtle);
+}
+
+.dvm-check-input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--dvm-primary);
+  cursor: pointer;
+}
+
+.dvm-selection-area {
+  background: var(--dvm-subtle);
+  border: 1px solid var(--dvm-border);
+  border-radius: var(--dvm-radius);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.dvm-check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--dvm-radius-sm);
+  transition: background 0.1s;
+}
+
+.dvm-check-row:hover {
+  background: var(--dvm-subtle);
+}
+
+.dvm-check-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--dvm-primary);
+  cursor: pointer;
+}
+
+/* Hide Dash debug/dev tools in production look */
+._dash-error-menu {
+  display: none !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Organic layer — display type, over-rounded controls, second accent, states
+   Appended so it wins the cascade over the base component rules above.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* — Caprasimo display voice on headings & prominent titles (weight 400 only) — */
+h1, h2, h3, h4, h5, h6,
+.dvm-page-title,
+.dvm-section-title,
+.dvm-card-title,
+.dvm-header-title,
+.dvm-section-header h3,
+.dvm-version-panel-title,
+.dvm-chart-title,
+.dvm-metric-value {
+  font-family: var(--dvm-font-heading);
+  font-weight: 600;
+  font-optical-sizing: auto;
+  letter-spacing: -0.005em;
+}
+
+/* Buttons stay in the body face (Figtree) for legibility */
+.dvm-btn,
+.btn,
+.btn-primary,
+.btn-outline-primary,
+.btn-outline-secondary {
+  font-family: var(--dvm-font) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.005em;
+}
+
+/* — Over-rounded frame: pill buttons, badges, tabs and single-line inputs — */
+.dvm-btn,
+.btn,
+.btn-primary,
+.btn-outline-primary,
+.btn-outline-secondary,
+.btn-sm,
+.dvm-btn-sm,
+.dvm-badge,
+.dvm-pill,
+.dvm-version-badge,
+.dvm-connection-badge,
+.dvm-version-control,
+.dvm-nav-tab,
+.dvm-tab-pill {
+  border-radius: var(--radius-pill) !important;
+}
+.dvm-input,
+input.form-control,
+input.dvm-input,
+.Select-control {
+  border-radius: var(--radius-pill) !important;
+}
+/* Multi-line fields stay softly rounded, not pill */
+textarea.form-control,
+textarea.dvm-input,
+.dvm-code-editor,
+.dvm-code-readonly,
+.dvm-sql-block {
+  border-radius: var(--radius-md) !important;
+}
+/* Containers lean into the large radius */
+.dvm-card,
+.dvm-card-static,
+.dvm-version-panel,
+.dvm-table-wrap,
+.dvm-table-container,
+.dvm-chart-card {
+  border-radius: var(--radius-lg);
+}
+
+/* — Terracotta second accent as a genuine second voice — */
+.dvm-badge-accent2,
+.dvm-badge-secondary {
+  color: var(--dvm-accent-2-fg);
+  background: var(--dvm-accent-2-bg);
+}
+.dvm-connection-badge.connected {
+  /* keep success green for connection status */
+}
+.dvm-version-badge {
+  color: var(--dvm-accent-2);
+  background: var(--dvm-accent-2-bg);
+}
+.dvm-btn-tertiary:hover:not(:disabled) {
+  color: var(--dvm-accent-2-hover);
+  background: var(--dvm-accent-2-bg);
+}
+
+/* — Themed interaction states (never browser defaults) — */
+:focus-visible {
+  outline: 2px solid var(--dvm-primary);
+  outline-offset: 2px;
+}
+::selection {
+  background: color-mix(in srgb, var(--dvm-primary) 30%, transparent);
+}
+
+/* ─── Dark mode ───────────────────────────────────────────────────────────
+   Same --dvm-* roles, Organic's second (violet-on-ink) palette. Follows the OS
+   unless <html data-theme="light">; force with data-theme="dark" or .theme-dark. */
+:root[data-theme="dark"],
+.theme-dark {
+  color-scheme: dark;
+  --dvm-primary: #8b6cf0;
+  --dvm-primary-hover: #a488f4;
+  --dvm-primary-active: #bda7f8;
+  --dvm-primary-focus: rgba(139, 108, 240, 0.35);
+
+  --dvm-accent-2: #e0813a;
+  --dvm-accent-2-hover: #e0934f;
+  --dvm-accent-2-active: #eeae79;
+  --dvm-accent-2-bg: #2c1a0c;
+  --dvm-accent-2-fg: #eeae79;
+
+  --dvm-text: #ece7f5;
+  --dvm-text-secondary: #a79fb5;
+  --dvm-text-disabled: #635a74;
+
+  --dvm-bg: #16121f;
+  --dvm-surface: #201a2c;
+  --dvm-subtle: #1f1929;
+  --dvm-neutral-chip: #282133;
+
+  --dvm-border: #332b40;
+  --dvm-border-input: #453b54;
+  --dvm-hairline: color-mix(in srgb, var(--dvm-text) 14%, transparent);
+
+  --dvm-success: #4ec38a;
+  --dvm-success-bg: color-mix(in srgb, #4ec38a 16%, transparent);
+  --dvm-warning: #e0a33a;
+  --dvm-warning-bg: color-mix(in srgb, #e0a33a 18%, transparent);
+  --dvm-error: #f2707a;
+  --dvm-error-bg: color-mix(in srgb, #f2707a 16%, transparent);
+  --dvm-info: #8b6cf0;
+  --dvm-info-bg: #241a3f;
+
+  --series-1: #8b6cf0;
+  --series-2: #e0813a;
+  --series-3: #4bbfa0;
+  --series-4: #6aabf7;
+  --series-5: #f2637f;
+  --series-6: #a79fb5;
+  --series-7: #e2c04a;
+  --series-8: #7cc86a;
+
+  --shadow-card: 0 0 0 1px color-mix(in srgb, #ece7f5 9%, transparent), 0 1px 2px rgba(0,0,0,0.5);
+  --shadow-raised: 0 0 0 1px color-mix(in srgb, #ece7f5 9%, transparent), 0 4px 12px rgba(0,0,0,0.55);
+  --shadow-dropdown: 0 0 0 1px color-mix(in srgb, #ece7f5 11%, transparent), 0 16px 40px rgba(0,0,0,0.6);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --dvm-primary: #8b6cf0;
+    --dvm-primary-hover: #a488f4;
+    --dvm-primary-active: #bda7f8;
+    --dvm-primary-focus: rgba(139, 108, 240, 0.35);
+
+    --dvm-accent-2: #e0813a;
+    --dvm-accent-2-hover: #e0934f;
+    --dvm-accent-2-active: #eeae79;
+    --dvm-accent-2-bg: #2c1a0c;
+    --dvm-accent-2-fg: #eeae79;
+
+    --dvm-text: #ece7f5;
+    --dvm-text-secondary: #a79fb5;
+    --dvm-text-disabled: #635a74;
+
+    --dvm-bg: #16121f;
+    --dvm-surface: #201a2c;
+    --dvm-subtle: #1f1929;
+    --dvm-neutral-chip: #282133;
+
+    --dvm-border: #332b40;
+    --dvm-border-input: #453b54;
+    --dvm-hairline: color-mix(in srgb, var(--dvm-text) 14%, transparent);
+
+    --dvm-success: #4ec38a;
+    --dvm-success-bg: color-mix(in srgb, #4ec38a 16%, transparent);
+    --dvm-warning: #e0a33a;
+    --dvm-warning-bg: color-mix(in srgb, #e0a33a 18%, transparent);
+    --dvm-error: #f2707a;
+    --dvm-error-bg: color-mix(in srgb, #f2707a 16%, transparent);
+    --dvm-info: #8b6cf0;
+    --dvm-info-bg: #241a3f;
+
+    --series-1: #8b6cf0;
+    --series-2: #e0813a;
+    --series-3: #4bbfa0;
+    --series-4: #6aabf7;
+    --series-5: #f2637f;
+    --series-6: #a79fb5;
+    --series-7: #e2c04a;
+    --series-8: #7cc86a;
+
+    --shadow-card: 0 0 0 1px color-mix(in srgb, #ece7f5 9%, transparent), 0 1px 2px rgba(0,0,0,0.5);
+    --shadow-raised: 0 0 0 1px color-mix(in srgb, #ece7f5 9%, transparent), 0 4px 12px rgba(0,0,0,0.55);
+    --shadow-dropdown: 0 0 0 1px color-mix(in srgb, #ece7f5 11%, transparent), 0 16px 40px rgba(0,0,0,0.6);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   i18n additions — language switch + how-to / disclaimer on the landing
+   ═══════════════════════════════════════════════════════════════════════════ */
+.dvm-lang-switch {
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: 10px; margin-bottom: 10px;
+}
+.dvm-lang-label {
+  font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--dvm-text-secondary); font-weight: 600;
+}
+.dvm-lang-pills .dvm-tab-pill { min-width: 40px; justify-content: center; }
+
+.dvm-howto-card {
+  background: var(--dvm-surface); border: 1px solid var(--dvm-border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-card);
+  padding: var(--sp-4) var(--sp-5); margin-bottom: 20px;
+}
+.dvm-howto-head { display: flex; align-items: center; gap: 8px; margin-bottom: var(--sp-3); }
+.dvm-howto-title {
+  font-family: var(--dvm-font-heading); font-weight: 600; font-optical-sizing: auto;
+  font-size: 16px; margin: 0; color: var(--dvm-text);
+}
+.dvm-howto-steps {
+  margin: 0; padding-left: 22px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.dvm-howto-steps li { font-size: 13px; color: var(--dvm-text); line-height: 1.5; }
+.dvm-howto-steps li::marker { color: var(--dvm-primary); font-weight: 700; }
+.dvm-howto-disclaimer {
+  display: flex; align-items: flex-start; gap: 8px; margin-top: var(--sp-3);
+  padding: 10px 12px; border-radius: var(--radius-md);
+  background: var(--dvm-accent-2-bg); color: var(--dvm-accent-2-fg);
+  font-size: 12.5px; line-height: 1.5;
+}
+.dvm-howto-disclaimer .bi { margin-top: 2px; flex: none; font-size: 15px; }
+
+/* What-the-tool-checks list on the landing (full width, accent bullets).
+   No left divider — it reads as one unified box with the intro paragraph. */
+.dvm-scope-list {
+  list-style: none; margin: 2px 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: 9px;
+}
+.dvm-scope-list li {
+  position: relative; padding-left: 18px;
+  font-size: 13.5px; line-height: 1.5; color: var(--dvm-text);
+}
+.dvm-scope-list li::before {
+  content: ""; position: absolute; left: 0; top: 8px;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--dvm-primary);
+}
+
+/* Per-table Copy / CSV toolbar (see assets/table-tools.js) */
+.dvm-table-toolbar {
+  display: flex; justify-content: flex-end; gap: 6px;
+  padding: 6px 8px;
+  background: var(--dvm-subtle);
+  border-bottom: 1px solid var(--dvm-border);
+}
+.dvm-table-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--dvm-font); font-size: 11px; font-weight: 600;
+  color: var(--dvm-text-secondary);
+  background: var(--dvm-surface);
+  border: 1px solid var(--dvm-border); border-radius: var(--radius-pill);
+  padding: 4px 11px; cursor: pointer; transition: all var(--transition);
+}
+.dvm-table-btn:hover {
+  color: var(--dvm-primary); border-color: var(--dvm-primary);
+  background: var(--dvm-info-bg);
+}
+.dvm-table-btn .bi { font-size: 12px; }
+.dvm-table-btn.is-ok { color: var(--dvm-success); border-color: var(--dvm-success); }
+.dvm-table-btn.is-err { color: var(--dvm-error); border-color: var(--dvm-error); }
+
+/* "Show top N" control above a table */
+.dvm-topn { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.dvm-topn-label {
+  font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--dvm-text-secondary); font-weight: 600;
+}
+.dvm-topn .dvm-tab-pill { min-width: 34px; justify-content: center; }
+
+/* ── Help / FAQ dialog ─────────────────────────────────────────────────── */
+.dvm-dialog-backdrop {
+  position: fixed; inset: 0; z-index: 1000;
+  display: grid; place-items: center; padding: var(--sp-4);
+  background: color-mix(in srgb, #000 45%, transparent);
+}
+.dvm-help-dialog {
+  width: min(560px, 100%); max-height: 85vh; overflow: auto;
+  background: var(--dvm-surface); color: var(--dvm-text);
+  border: 1px solid var(--dvm-border); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-dropdown); padding: var(--sp-5) var(--sp-6);
+}
+.dvm-help-head { display: flex; align-items: center; gap: 8px; margin-bottom: var(--sp-3); }
+.dvm-help-title { font-family: var(--dvm-font-heading); font-weight: 600; font-size: 18px; }
+.dvm-help-q {
+  font-family: var(--dvm-font-heading); font-weight: 600; font-size: 15px;
+  margin: var(--sp-3) 0 var(--sp-2); color: var(--dvm-text);
+}
+.dvm-help-dialog p { font-size: 13px; color: var(--dvm-text-secondary); margin: 0 0 var(--sp-2); }
+.dvm-help-steps {
+  margin: 0 0 var(--sp-3); padding-left: 20px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.dvm-help-steps li { font-size: 13px; line-height: 1.5; color: var(--dvm-text); }
+.dvm-help-steps li::marker { color: var(--dvm-primary); font-weight: 700; }
+.dvm-help-contact {
+  display: flex; align-items: center; font-size: 13px; margin-top: var(--sp-3);
+  padding-top: var(--sp-3); border-top: 1px solid var(--dvm-border);
+}
+
+/* ── Print / PDF: hide chrome, expand every analysis section ────────────── */
+@media print {
+  .dvm-header, .dvm-sidebar, .dvm-lang-switch, .dvm-table-toolbar,
+  .dvm-dialog-backdrop, .dvm-version-panel, .dvm-nav-tabs, .dvm-tab-pills,
+  .dvm-progress-container, .dvm-selection-area, .dvm-howto-card,
+  #btn-help, #btn-export-pdf, #btn-run-all-analyses, #btn-run-selected,
+  #btn-export-excel, #btn-export-selected {
+    display: none !important;
+  }
+  .dvm-analyses-layout { display: block !important; }
+  .dvm-content-panel { padding: 0 !important; min-height: 0 !important; }
+  [id^="section-"] { display: block !important; page-break-inside: auto; }
+  body, .dvm-app-shell { background: #fff !important; }
+  .dvm-table-scroll { max-height: none !important; overflow: visible !important; }
+  .dvm-card, .dvm-card-static, .dvm-chart-card { box-shadow: none !important; }
+}
