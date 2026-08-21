@@ -710,10 +710,10 @@ body {
   text-align: left;
 }
 
-/* Right-align numeric columns */
+/* Left-align numeric columns */
 .dvm-table thead th.numeric,
 .dvm-table tbody td.numeric {
-  text-align: right;
+  text-align: left;
   font-variant-numeric: tabular-nums;
 }
 
@@ -780,7 +780,7 @@ body {
   color: var(--dvm-text);
 }
 .dvm-table-num {
-  text-align: right;
+  text-align: left;
   font-variant-numeric: tabular-nums;
 }
 .dvm-table-row-even {
